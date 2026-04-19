@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoMix — Sustainable Concrete Analyzer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --moss: #3d5a3e;
+            --sage: #7a9e7e;
+            --leaf: #a8c5a0;
+            --mist: #e8f0e9;
+            --earth: #6b4f3a;
+            --clay: #c4956a;
+            --stone: #8c8c7a;
+            --cream: #faf7f2;
+            --bark: #2c3525;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background-color: var(--cream);
+            background-image:
+                radial-gradient(ellipse at 10% 20%, rgba(168,197,160,0.15) 0%, transparent 60%),
+                radial-gradient(ellipse at 90% 80%, rgba(196,149,106,0.10) 0%, transparent 50%);
+            min-height: 100vh;
+            color: var(--bark);
+        }
+
+        h1, h2, .serif { font-family: 'DM Serif Display', serif; }
+
+        /* Organic shapes */
+        .blob {
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+        }
+
+        /* Leaf accent line */
+        .leaf-line::before {
+            content: '';
+            display: block;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--moss), var(--leaf));
+            border-radius: 2px;
+            position: absolute;
+            left: 0; top: 0;
+        }
+
+        /* Range input styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 999px;
+            background: linear-gradient(to right, var(--moss) 0%, var(--moss) var(--val, 50%), #d1d5c8 var(--val, 50%));
+            outline: none;
+            cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            background: white;
+            border: 3px solid var(--moss);
+            box-shadow: 0 2px 8px rgba(61,90,62,0.25);
+            transition: transform 0.15s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        input[type=number] {
+            font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type=number]:focus {
+            border-color: var(--moss) !important;
+            box-shadow: 0 0 0 3px rgba(61,90,62,0.12);
+            outline: none;
+        }
+
+        /* Card hover */
+        .eco-card {
+            transition: transform 0.25s cubic-bezier(.4,0,.2,1), box-shadow 0.25s;
+        }
+        .eco-card:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(44,53,37,0.10); }
+
+        /* Stagger animations */
+        @keyframes riseIn {
+            from { opacity:0; transform: translateY(28px); }
+            to   { opacity:1; transform: translateY(0); }
+        }
+        .rise { animation: riseIn 0.7s cubic-bezier(.16,1,.3,1) both; }
+        .d1 { animation-delay: 0.05s; }
+        .d2 { animation-delay: 0.15s; }
+        .d3 { animation-delay: 0.25s; }
+        .d4 { animation-delay: 0.35s; }
+        .d5 { animation-delay: 0.45s; }
+
+        /* Best row in table */
+        .best-row td { background: var(--moss); color: white; }
+        .best-row td:first-child { border-radius: 10px 0 0 10px; }
+        .best-row td:last-child  { border-radius: 0 10px 10px 0; }
+
+        /* Score pill */
+        .score-pill {
+            display: inline-flex;
+            padding: 2px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+
+        /* Leaf decorative SVG */
+        .leaf-deco {
+            position: absolute;
+            opacity: 0.07;
+            pointer-events: none;
+        }
+
+        /* Metric bubble */
+        .metric-bubble {
+            background: white;
+            border: 1.5px solid #dde5d8;
+            border-radius: 16px;
+            padding: 16px 20px;
+            transition: border-color 0.2s;
+        }
+        .metric-bubble:hover { border-color: var(--sage); }
+
+        /* Warning banner */
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)} 75%{transform:translateX(4px)} }
+        .warning-shake { animation: shake 0.4s ease; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--leaf); border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- Background leaf decorations -->
+<svg class="leaf-deco" style="top:-40px;right:-60px;width:420px;" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M200 20 C320 20 380 100 380 200 C380 300 300 380 200 380 C100 380 20 300 20 200 C20 100 80 20 200 20Z" fill="#3d5a3e"/>
+    <path d="M200 380 L200 20" stroke="#3d5a3e" stroke-width="2"/>
+    <path d="M200 200 Q280 140 340 80" stroke="#3d5a3e" stroke-width="1.5"/>
+    <path d="M200 200 Q120 140 60 80" stroke="#3d5a3e" stroke-width="1.5"/>
+</svg>
+<svg class="leaf-deco" style="bottom:-80px;left:-40px;width:300px;" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="150" cy="150" rx="120" ry="80" fill="#7a9e7e" transform="rotate(-30 150 150)"/>
+</svg>
+
+<div class="max-w-screen-xl mx-auto px-4 py-6 md:px-8 md:py-10 space-y-6">
+
+    <!-- Header -->
+    <header class="rise d1 relative overflow-hidden rounded-3xl" style="background: linear-gradient(135deg, var(--bark) 0%, var(--moss) 60%, var(--sage) 100%);">
+        <div class="absolute inset-0 opacity-10" style="background-image:url('data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+        <div class="relative px-8 py-10 md:py-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+            <div>
+                <div class="inline-flex items-center gap-2 mb-4 px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase" style="background:rgba(255,255,255,0.15);color:#d4edda;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 8C8 10 5.9 16.17 3.82 19.33L5.71 21l1-1.01C7.39 21.23 8.5 22 10 22c3 0 4-2 4-2s1 2 4 2 4-2 4-2V8z"/></svg>
+                    Sustainability Lab
+                </div>
+                <h1 class="text-4xl md:text-5xl text-white leading-tight">EcoMix Analyzer</h1>
+                <p class="mt-2 text-base md:text-lg font-light" style="color:rgba(255,255,255,0.65);">CO₂ emissions & strength optimization for Red Bauxite concrete</p>
+            </div>
+            <div class="flex gap-3 flex-wrap">
+                <div class="metric-bubble" style="border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);">
+                    <div class="text-xs font-medium mb-1" style="color:rgba(255,255,255,0.5);">Mixes Analyzed</div>
+                    <div class="text-2xl font-semibold text-white">5</div>
+                </div>
+                <div class="metric-bubble" style="border-color:rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);">
+                    <div class="text-xs font-medium mb-1" style="color:rgba(255,255,255,0.5);">Max Reduction</div>
+                    <div class="text-2xl font-semibold text-white" id="hdr_max_reduction">—</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Warning -->
+    <div id="strength_warning" class="hidden rise rounded-2xl border-l-4 px-5 py-4 flex items-start gap-3" style="background:#fef3ec;border-color:#e07b39;">
+        <svg class="h-5 w-5 mt-0.5 flex-shrink-0" style="color:#e07b39;" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+        <p class="text-sm" style="color:#9a4a1a;"><strong>Base cement changed.</strong> Please update compressive strength values to ensure accurate calculations.</p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-6">
+
+        <!-- Sidebar -->
+        <aside class="w-full lg:w-80 xl:w-96 space-y-5">
+
+            <!-- Mix Proportions -->
+            <div class="eco-card rise d2 bg-white rounded-3xl p-6 border" style="border-color:#e5ead8;">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:var(--mist);">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--moss)" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    </div>
+                    <h2 class="serif text-lg" style="color:var(--bark);">Mix Proportions</h2>
+                </div>
+                <label class="block text-xs font-semibold uppercase tracking-widest mb-1.5" style="color:var(--stone);">Total Binder / Base Cement (kg/m³)</label>
+                <input type="number" id="base_cement" value="394.32" step="0.1"
+                    class="w-full px-4 py-3 rounded-xl border text-sm font-medium"
+                    style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+            </div>
+
+            <!-- Emission Factors -->
+            <div class="eco-card rise d3 bg-white rounded-3xl p-6 border" style="border-color:#e5ead8;">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:#fef3ec;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--earth)" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <h2 class="serif text-lg" style="color:var(--bark);">Emission Factors</h2>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-widest mb-1.5" style="color:var(--stone);">Cement (kg CO₂/kg)</label>
+                        <input type="number" id="cement_ef" value="0.9" step="0.01"
+                            class="w-full px-4 py-3 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-widest mb-1.5" style="color:var(--stone);">Bauxite (kg CO₂/kg)</label>
+                        <input type="number" id="bauxite_ef" value="0.05" step="0.01"
+                            class="w-full px-4 py-3 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-widest mb-1.5" style="color:var(--stone);">Transport (kg CO₂/km)</label>
+                        <input type="number" id="transport_ef" value="0.02" step="0.01"
+                            class="w-full px-4 py-3 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div class="pt-1">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-semibold uppercase tracking-widest" style="color:var(--stone);">Transport Distance</label>
+                            <span id="transport_km_val" class="text-sm font-bold px-3 py-0.5 rounded-full" style="background:var(--mist);color:var(--moss);">50 km</span>
+                        </div>
+                        <input type="range" id="transport_km" min="0" max="500" value="50" class="w-full">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compressive Strengths -->
+            <div class="eco-card rise d4 bg-white rounded-3xl p-6 border" style="border-color:#e5ead8;">
+                <div class="flex items-center gap-3 mb-5">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center" style="background:#f0f4fe;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5066b0" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    </div>
+                    <h2 class="serif text-lg" style="color:var(--bark);">Compressive Strength (MPa)</h2>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold w-8 text-center rounded-lg py-1" style="background:var(--mist);color:var(--moss);">0%</span>
+                        <input type="number" id="str_0" value="32.0" step="0.1"
+                            class="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold w-8 text-center rounded-lg py-1" style="background:var(--mist);color:var(--moss);">5%</span>
+                        <input type="number" id="str_5" value="35.0" step="0.1"
+                            class="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold w-8 text-center rounded-lg py-1" style="background:var(--mist);color:var(--moss);">10%</span>
+                        <input type="number" id="str_10" value="36.8" step="0.1"
+                            class="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold w-8 text-center rounded-lg py-1" style="background:var(--mist);color:var(--moss);">15%</span>
+                        <input type="number" id="str_15" value="32.3" step="0.1"
+                            class="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs font-bold w-8 text-center rounded-lg py-1" style="background:var(--mist);color:var(--moss);">20%</span>
+                        <input type="number" id="str_20" value="28.5" step="0.1"
+                            class="flex-1 px-4 py-2.5 rounded-xl border text-sm font-medium"
+                            style="border-color:#dde5d0;background:#fafbf7;color:var(--bark);">
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 space-y-5 min-w-0">
+
+            <!-- Best Mix Hero -->
+            <div class="rise d2 eco-card relative overflow-hidden rounded-3xl" style="background:linear-gradient(135deg,var(--moss) 0%,#2e4a2f 50%,var(--bark) 100%);">
+                <!-- Decorative circles -->
+                <div class="absolute -top-12 -right-12 w-48 h-48 rounded-full opacity-10" style="background:var(--leaf);"></div>
+                <div class="absolute -bottom-8 -left-8 w-32 h-32 rounded-full opacity-10" style="background:var(--clay);"></div>
+                <div class="absolute top-6 right-6">
+                    <div id="eco_badge" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide" style="background:rgba(255,255,255,0.18);color:white;backdrop-filter:blur(8px);">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17 8C8 10 5.9 16.17 3.82 19.33L5.71 21l1-1.01C7.39 21.23 8.5 22 10 22c3 0 4-2 4-2s1 2 4 2 4-2 4-2V8z"/></svg>
+                        ECO A+
+                    </div>
+                </div>
+                <div class="relative p-7 md:p-8">
+                    <p class="text-xs font-bold uppercase tracking-widest mb-3" style="color:rgba(255,255,255,0.5);">Optimal Recommendation</p>
+                    <h2 class="serif text-3xl md:text-4xl text-white mb-4" id="best_mix_title">Best Mix: — Red Bauxite</h2>
+                    <div class="flex flex-wrap gap-4 mb-6" id="best_mix_details">
+                        <span class="text-lg font-light" style="color:rgba(255,255,255,0.75);">Calculating…</span>
+                    </div>
+
+                    <!-- Insight block -->
+                    <div class="rounded-2xl p-4 flex flex-col sm:flex-row sm:items-start gap-4" style="background:rgba(255,255,255,0.10);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);">
+                        <svg class="h-6 w-6 flex-shrink-0 mt-0.5" style="color:#a8f0c0;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <div class="flex-1">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                                <span class="text-xs font-bold uppercase tracking-widest" style="color:#a8f0c0;">Smart Insight</span>
+                                <div class="flex items-center gap-2">
+                                    <label class="text-xs" style="color:rgba(255,255,255,0.6);">Scale (m³):</label>
+                                    <input type="number" id="project_volume" value="1.0" step="0.1"
+                                        class="w-20 px-2 py-1 rounded-lg text-sm font-medium text-white focus:outline-none"
+                                        style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);">
+                                </div>
+                            </div>
+                            <p id="insight_text" class="text-sm leading-relaxed" style="color:rgba(255,255,255,0.85);">Calculating insights…</p>
+                            <div id="eco_savings" class="hidden mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold" style="background:rgba(168,240,192,0.15);color:#a8f0c0;border:1px solid rgba(168,240,192,0.25);">
+                                🌱 <span id="savings_text"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="eco-card rise d3 bg-white rounded-3xl p-6 border" style="border-color:#e5ead8;">
+                <h2 class="serif text-xl mb-6" style="color:var(--bark);">Performance Metrics</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div class="relative h-56 sm:h-64">
+                        <canvas id="co2Chart"></canvas>
+                    </div>
+                    <div class="relative h-56 sm:h-64">
+                        <canvas id="strengthChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="eco-card rise d4 bg-white rounded-3xl p-6 border overflow-hidden" style="border-color:#e5ead8;">
+                <h2 class="serif text-xl mb-5" style="color:var(--bark);">Mix Comparison</h2>
+                <div class="overflow-x-auto -mx-2">
+                    <table class="min-w-full border-collapse text-sm">
+                        <thead>
+                            <tr>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">Mix %</th>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">Cement kg</th>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">Bauxite kg</th>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">MPa</th>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">CO₂ kg</th>
+                                <th class="py-3 px-4 text-left text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table_body" class="divide-y" style="divide-color:#f0f4ec;"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- What-if -->
+            <div class="eco-card rise d5 rounded-3xl p-6 border" style="background:var(--mist);border-color:#d4e0d0;">
+                <h2 class="serif text-xl mb-5" style="color:var(--bark);">What-If Analysis</h2>
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <label class="text-xs font-bold uppercase tracking-widest" style="color:var(--stone);">Adjust Mix Percentage</label>
+                        <span id="whatif_mix_val" class="text-sm font-bold px-3 py-1 rounded-full bg-white shadow-sm" style="color:var(--moss);">10%</span>
+                    </div>
+                    <input type="range" id="whatif_mix" min="0" max="20" step="5" value="10" class="w-full">
+                </div>
+                <div class="grid grid-cols-3 gap-3" id="whatif_details"></div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="rise text-center py-4 text-xs" style="color:var(--stone);">
+        🌿 EcoMix Analyzer — Building a greener future, one mix at a time
+    </footer>
+
+</div>
+
+<script>
+    const mixes = [0, 5, 10, 15, 20];
+    let co2ChartInstance = null;
+    let strengthChartInstance = null;
+
+    Chart.defaults.font.family = "'DM Sans', sans-serif";
+    Chart.defaults.color = '#8c8c7a';
+
+    function setRangeBackground(el) {
+        const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
+        const pct = ((val - min) / (max - min)) * 100;
+        el.style.setProperty('--val', pct + '%');
+    }
+
+    document.querySelectorAll('input[type=range]').forEach(el => {
+        setRangeBackground(el);
+        el.addEventListener('input', () => setRangeBackground(el));
+    });
+
+    function updateCalculations() {
+        const base_cement = parseFloat(document.getElementById('base_cement').value) || 0;
+        const cement_kg = mixes.map(m => base_cement * (1 - m/100));
+        const bauxite_kg = mixes.map(m => base_cement * (m/100));
+
+        const default_strengths = [32.0, 35.0, 36.8, 32.3, 28.5];
+        const strengths = [
+            parseFloat(document.getElementById('str_0').value) || 0,
+            parseFloat(document.getElementById('str_5').value) || 0,
+            parseFloat(document.getElementById('str_10').value) || 0,
+            parseFloat(document.getElementById('str_15').value) || 0,
+            parseFloat(document.getElementById('str_20').value) || 0,
+        ];
+
+        const isDefaultStrength = strengths.every((v, i) => v === default_strengths[i]);
+        const warnEl = document.getElementById('strength_warning');
+        if (base_cement !== 394.32 && isDefaultStrength) {
+            warnEl.classList.remove('hidden');
+            warnEl.classList.add('warning-shake');
+            setTimeout(() => warnEl.classList.remove('warning-shake'), 400);
+            return;
+        } else {
+            warnEl.classList.add('hidden');
+        }
+
+        const cement_ef    = parseFloat(document.getElementById('cement_ef').value) || 0;
+        const bauxite_ef   = parseFloat(document.getElementById('bauxite_ef').value) || 0;
+        const transport_ef = parseFloat(document.getElementById('transport_ef').value) || 0;
+        const transport_km = parseFloat(document.getElementById('transport_km').value) || 0;
+
+        document.getElementById('transport_km_val').innerText = transport_km + ' km';
+
+        const co2_emissions = mixes.map((_, i) =>
+            (cement_kg[i] * cement_ef) + (bauxite_kg[i] * bauxite_ef) + (transport_km * transport_ef)
+        );
+
+        const max_strength = Math.max(...strengths);
+        const max_co2      = Math.max(...co2_emissions);
+
+        let scores = [], best_index = 0, max_score = -Infinity;
+        for (let i = 0; i < 5; i++) {
+            const s = (strengths[i] / max_strength) - (co2_emissions[i] / max_co2);
+            scores.push(s);
+            if (s > max_score) { max_score = s; best_index = i; }
+        }
+
+        // Header max reduction
+        const minCO2 = Math.min(...co2_emissions);
+        const maxCO2 = Math.max(...co2_emissions);
+        const reduction = ((maxCO2 - minCO2) / maxCO2 * 100).toFixed(1);
+        document.getElementById('hdr_max_reduction').innerText = reduction + '% CO₂';
+
+        // Best Mix
+        document.getElementById('best_mix_title').innerText = `Best Mix: ${mixes[best_index]}% Red Bauxite`;
+        document.getElementById('best_mix_details').innerHTML = `
+            <div class="flex items-center gap-2 text-base font-medium" style="color:rgba(255,255,255,0.85);">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#a8f0c0;"></div>
+                ${strengths[best_index].toFixed(1)} MPa strength
+            </div>
+            <div class="flex items-center gap-2 text-base font-medium" style="color:rgba(255,255,255,0.85);">
+                <div class="w-2.5 h-2.5 rounded-full" style="background:#ffd580;"></div>
+                ${co2_emissions[best_index].toFixed(2)} kg CO₂
+            </div>
+        `;
+
+        // Insight
+        let saved_co2 = 0;
+        if (best_index === 0) {
+            document.getElementById('insight_text').innerHTML = `The <strong>0% baseline</strong> is optimal under current parameters — alternatives don't sufficiently offset their strength/emission trade-offs.`;
+        } else {
+            const str_change = ((strengths[best_index] - strengths[0]) / strengths[0]) * 100;
+            const co2_change = ((co2_emissions[best_index] - co2_emissions[0]) / co2_emissions[0]) * 100;
+            const str_word = str_change >= 0 ? 'higher' : 'lower';
+            const co2_word = co2_change >= 0 ? 'increase' : 'reduction';
+            document.getElementById('insight_text').innerHTML = `The <strong>${mixes[best_index]}% mix</strong> gives <strong>${Math.abs(str_change).toFixed(1)}% ${str_word} strength</strong> with a <strong>${Math.abs(co2_change).toFixed(1)}% CO₂ ${co2_word}</strong> vs. baseline.`;
+            saved_co2 = co2_emissions[0] - co2_emissions[best_index];
+        }
+
+        const project_volume = parseFloat(document.getElementById('project_volume').value) || 1.0;
+        const total_savings = saved_co2 * project_volume;
+        const savingsEl = document.getElementById('eco_savings');
+        const badgeEl = document.getElementById('eco_badge');
+
+        if (total_savings > 0) {
+            savingsEl.classList.remove('hidden');
+            document.getElementById('savings_text').innerText = `You saved ${total_savings.toFixed(2)} kg CO₂ across ${project_volume} m³`;
+            badgeEl.innerHTML = `<svg width="12" height="12" fill="currentColor" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 19.33L5.71 21l1-1.01C7.39 21.23 8.5 22 10 22c3 0 4-2 4-2s1 2 4 2 4-2 4-2V8z"/></svg> ECO A+`;
+            badgeEl.style.background = 'rgba(255,255,255,0.18)';
+        } else {
+            savingsEl.classList.add('hidden');
+            badgeEl.innerHTML = `ECO B`;
+            badgeEl.style.background = 'rgba(196,149,106,0.3)';
+        }
+
+        // Table
+        let tbody = document.getElementById('table_body');
+        tbody.innerHTML = '';
+        for (let i = 0; i < 5; i++) {
+            const isBest = i === best_index;
+            const scoreColor = scores[i] > 0 ? '#3d5a3e' : '#9a4a1a';
+            const row = document.createElement('tr');
+            if (isBest) {
+                row.className = 'best-row';
+                row.innerHTML = `
+                    <td class="py-3.5 px-4 font-bold">${mixes[i]}% ★</td>
+                    <td class="py-3.5 px-4">${cement_kg[i].toFixed(2)}</td>
+                    <td class="py-3.5 px-4">${bauxite_kg[i].toFixed(1)}</td>
+                    <td class="py-3.5 px-4">${strengths[i].toFixed(1)}</td>
+                    <td class="py-3.5 px-4">${co2_emissions[i].toFixed(2)}</td>
+                    <td class="py-3.5 px-4"><span class="score-pill" style="background:rgba(255,255,255,0.2);color:white;">${scores[i].toFixed(3)}</span></td>
+                `;
+            } else {
+                row.innerHTML = `
+                    <td class="py-3 px-4 font-medium" style="color:var(--bark);">${mixes[i]}%</td>
+                    <td class="py-3 px-4" style="color:var(--stone);">${cement_kg[i].toFixed(2)}</td>
+                    <td class="py-3 px-4" style="color:var(--stone);">${bauxite_kg[i].toFixed(1)}</td>
+                    <td class="py-3 px-4" style="color:var(--bark);">${strengths[i].toFixed(1)}</td>
+                    <td class="py-3 px-4" style="color:var(--bark);">${co2_emissions[i].toFixed(2)}</td>
+                    <td class="py-3 px-4"><span class="score-pill" style="background:${scoreColor}18;color:${scoreColor};">${scores[i].toFixed(3)}</span></td>
+                `;
+            }
+            tbody.appendChild(row);
+        }
+
+        // What-if
+        const whatif_mix = parseInt(document.getElementById('whatif_mix').value);
+        document.getElementById('whatif_mix_val').innerText = whatif_mix + '%';
+        const wi = mixes.indexOf(whatif_mix);
+
+        const whatif_metrics = [
+            { label: 'Strength', value: strengths[wi].toFixed(1), unit: 'MPa', color: '#5066b0' },
+            { label: 'CO₂ Footprint', value: co2_emissions[wi].toFixed(2), unit: 'kg', color: 'var(--earth)' },
+            { label: 'Eco-Score', value: scores[wi].toFixed(3), unit: '', color: 'var(--moss)' },
+        ];
+        document.getElementById('whatif_details').innerHTML = whatif_metrics.map(m => `
+            <div class="bg-white rounded-2xl p-4 text-center border" style="border-color:#e5ead8;">
+                <div class="text-xs font-semibold uppercase tracking-widest mb-2" style="color:var(--stone);">${m.label}</div>
+                <div class="text-2xl font-bold" style="color:${m.color};">${m.value}</div>
+                <div class="text-xs mt-0.5" style="color:var(--stone);">${m.unit}</div>
+            </div>
+        `).join('');
+
+        updateCharts(mixes, co2_emissions, strengths, best_index);
+    }
+
+    function updateCharts(labels, co2Data, strengthData, best_index) {
+        const moss = '#3d5a3e';
+        const clay = '#c4956a';
+        const leaf = '#a8c5a0';
+
+        const pointColors = labels.map((_, i) => i === best_index ? moss : '#ffffff');
+        const pointBorders = labels.map((_, i) => i === best_index ? moss : '#a8c5a0');
+        const pointSizes  = labels.map((_, i) => i === best_index ? 7 : 4);
+
+        const baseOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#2c3525',
+                    padding: 12,
+                    cornerRadius: 12,
+                    displayColors: false,
+                    titleFont: { size: 13, weight: '600' },
+                    bodyFont: { size: 12 },
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    border: { display: false },
+                    title: { display: true, text: 'Red Bauxite %', font: { size: 11 }, color: '#8c8c7a' },
+                    ticks: { color: '#8c8c7a' }
+                },
+                y: {
+                    grid: { color: '#f0f4ec', borderDash: [4, 4] },
+                    border: { display: false },
+                    ticks: { color: '#8c8c7a' }
+                }
+            }
+        };
+
+        // CO2 Chart
+        const ctx1 = document.getElementById('co2Chart').getContext('2d');
+        if (co2ChartInstance) co2ChartInstance.destroy();
+        const grad1 = ctx1.createLinearGradient(0, 0, 0, 250);
+        grad1.addColorStop(0, 'rgba(196,149,106,0.25)');
+        grad1.addColorStop(1, 'rgba(196,149,106,0)');
+        co2ChartInstance = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'CO₂ (kg)',
+                    data: co2Data,
+                    borderColor: clay,
+                    borderWidth: 2.5,
+                    backgroundColor: grad1,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: pointBorders.map(() => clay),
+                    pointBorderWidth: 2,
+                    pointRadius: pointSizes,
+                    pointHoverRadius: 8,
+                }]
+            },
+            options: {
+                ...baseOptions,
+                plugins: { ...baseOptions.plugins, title: { display: true, text: 'CO₂ Emission Profile', color: '#2c3525', font: { size: 13, weight: '600' } } }
+            }
+        });
+
+        // Strength Chart
+        const ctx2 = document.getElementById('strengthChart').getContext('2d');
+        if (strengthChartInstance) strengthChartInstance.destroy();
+        const grad2 = ctx2.createLinearGradient(0, 0, 0, 250);
+        grad2.addColorStop(0, 'rgba(61,90,62,0.2)');
+        grad2.addColorStop(1, 'rgba(61,90,62,0)');
+        strengthChartInstance = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Strength (MPa)',
+                    data: strengthData,
+                    borderColor: moss,
+                    borderWidth: 2.5,
+                    backgroundColor: grad2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: pointColors,
+                    pointBorderColor: pointBorders.map(() => moss),
+                    pointBorderWidth: 2,
+                    pointRadius: pointSizes,
+                    pointHoverRadius: 8,
+                }]
+            },
+            options: {
+                ...baseOptions,
+                plugins: { ...baseOptions.plugins, title: { display: true, text: 'Strength Profile', color: '#2c3525', font: { size: 13, weight: '600' } } }
+            }
+        });
+    }
+
+    document.querySelectorAll('input').forEach(el => el.addEventListener('input', updateCalculations));
+    window.onload = updateCalculations;
+</script>
+</body>
+</html> 
